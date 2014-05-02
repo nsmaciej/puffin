@@ -1,0 +1,30 @@
+<html>
+    <head>
+        <title>Puffin's settings panel</title>
+        <link href='/style.css' rel='stylesheet' type='text/css'>
+    </head>
+    <body>
+        <img src='/puffin.png' class='logo'>
+        <h1 class='branding'>Puffin's setting panel</h1>
+        <p class='tagline'>Where Puffins change their settings</p>
+
+        <form method='POST' action='/'>
+            <span class='label'>Consumer key:</span><input name='consumer_key' type='text' value='{{consumer_key}}'><br>
+            <span class='label'>Consumer secret:</span><input name='consumer_secret' type='text' value='{{consumer_secret}}'><br>
+            <span class='label'>Access token:</span><input name='access_token' type='text' value='{{access_token}}'><br>
+            <span class='label'>Access token secret:</span><input name='access_token_secret' type='text' value='{{access_token_secret}}'><br>
+            <span class='label'>Track keyword:</span><input name='track_keyword' type='text' value='{{track_keyword}}'><br>
+            <span class='label'>Snapshot url:</span><input name='snapshot_url' type='text' value='{{snapshot_url}}'><br>
+            <span class='label'>Endpoint url:</span><input name='endpoint_url' type='text' value='{{endpoint_url}}'><br>
+            <span class='label'>Use http auth:</span><input name='use_http_auth' type='text' value='{{use_http_auth}}'><br>
+            <span class='label'>Http username:</span><input name='http_username' type='text' value='{{http_username}}'><br>
+            <span class='label'>Http password:</span><input name='http_password' type='text' value='{{http_password}}'><br>
+            <span class='label'>Endpoint recovery time:</span><input name='endpoint_recovery_time' type='text' value='{{endpoint_recovery_time}}'><br>
+            <span class='label'>Endpoint timeout:</span><input name='endpoint_timeout' type='text' value='{{endpoint_timeout}}'><br>
+            <span class='label'>Set reply id:</span><input name='set_reply_id' type='text' value='{{set_reply_id}}'><br>
+            <span class='label'>Response template:</span><input name='response_template' type='text' value='{{response_template}}'><br>
+
+            <input type='submit' value='Save'>
+        </form>
+    </body>
+</html>

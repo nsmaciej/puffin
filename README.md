@@ -1,5 +1,5 @@
 # Evercam puffin
-![Puffin](puffin.png)
+![Puffin](public/puffin.png)
 
 A simple program for replaying to tweets with a keyword with an image from an http server
 -----------------------------------------------------------------------------------------
