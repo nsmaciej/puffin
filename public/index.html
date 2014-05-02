@@ -7,6 +7,7 @@
         <img src='/puffin.png' class='logo'>
         <h1 class='branding'>Puffin's setting panel</h1>
         <p class='tagline'>Where Puffins change their settings</p>
+        <p class='imagelink'><a href='/image.html'>Preview of the camera image</a></p>
 
         <form method='POST' action='/'>
             <span class='label'>Consumer key:</span><input name='consumer_key' type='text' value='{{consumer_key}}'><br>
@@ -26,5 +27,9 @@
 
             <input type='submit' value='Save'>
         </form>
+
+        <p class='info'>
+            More info on each of the options can be found <a href='https://github.com/evercam/puffin/blob/master/docs/config.md'>here</a>.
+        </p>
     </body>
 </html>

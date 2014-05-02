@@ -9,10 +9,12 @@ body {
 }
 .tagline {
     font-style: italic;
+}
+.imagelink {
+    padding: 20px;
+    display: inline-block;
     margin-bottom: 40px;
     border-bottom: 1px solid #ccc;
-    padding: 0 20px 20px;
-    display: inline-block;
 }
 .label, input {
     width: 24ex;
@@ -23,6 +25,11 @@ body {
 }
 .logo {
     height: 200px;
+}
+.info {
+    margin-top: 20px;
+    border-top: 1px solid #ccc;
+    padding-top: 20px;
 }
 input[type='submit'] {
     text-align: center;
@@ -44,4 +51,11 @@ input[type='text'] {
 }
 input[type='text']:focus {
     background-color: #eee;
+}
+.preview {
+    display: block;
+    margin: 0 auto;
+}
+h2 {
+    padding-bottom: 6px;
 }

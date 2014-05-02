@@ -225,6 +225,11 @@ function startHttpConfigServer() {
         res.end(mustache.render(fs.readFileSync('public/index.html', 'utf-8'), httpConfig));
     });
 
+    app.get('/preview.png', function(req, res) {
+        res.setHeader('Content-type', 'image/png');
+        res.end(imageCache);
+    });
+
     app.post('/', function(req, res) {
         log.warn('New settings saved');
 
