@@ -1,7 +1,5 @@
 ## Evercam puffin
-<p align="center">
-    ![Puffin](public/puffin.png)
-</p>
+![Puffin](public/puffin.png)
 
 ### A simple program for replaying to tweets with a keyword with an image from an http server
 
@@ -21,6 +19,7 @@ npm start
 * Periodically updating image cache
 * Comprehensive logging with Bunyan
 * Simple to use online configuration panel
+
 ![Config panel](demo.png)
 
 ### Issues
