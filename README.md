@@ -22,7 +22,5 @@ npm start
 
 ![Config panel](demo.png)
 
-### Issues
-
 ### Credits
 Puffin image: [This is Not That Blog](http://thisisnotthatblog.com/2011/03/31/im-sorry-i-didnt-draw-a-puffin-until-just-now/), All Right Reserved
