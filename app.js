@@ -215,7 +215,7 @@ function startTwitterStream() {
 function startHttpConfigServer() {
     var app = express();
 
-    app.use(express.basicAuth('username', 'password'));
+    app.use(express.basicAuth(config.http_config_username, config.http_config_password));
     app.use(express.urlencoded());
     app.use(app.router);
     app.use(express.static('public'));
@@ -255,6 +255,7 @@ function startHttpConfigServer() {
         }, 1000 * 5);
     });
 
+    log.info('Starting configuration server at port ' + config.config_port);
     app.listen(config.config_port);
 }
 
@@ -288,7 +289,6 @@ if (config.start_twitter_stream) {
 }
 
 if (config.start_http_config) {
-    log.info('Starting configuration server at port ' + config.config_port);
     startHttpConfigServer();
 } else {
     log.warn('start_http_config is off. Won\'t start http configuration server');
