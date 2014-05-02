@@ -256,7 +256,7 @@ function startHttpConfigServer() {
     });
 
     log.info('Starting configuration server at port ' + config.config_port);
-    app.listen(config.config_port);
+    app.listen(config.config_port, '0.0.0.0');
 }
 
 
