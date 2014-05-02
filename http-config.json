@@ -1,0 +1,16 @@
+{
+    "consumer_key": "...",
+    "consumer_secret": "...",
+    "access_token": "...",
+    "access_token_secret": "...",
+    "track_keyword": "#puffin",
+    "snapshot_url": "/file.jpg",
+    "endpoint_url": "example.com:80",
+    "use_http_auth": true,
+    "http_username": "bob",
+    "http_password": "password",
+    "endpoint_recovery_time": 10000,
+    "endpoint_timeout": 30000,
+    "set_reply_id": true,
+    "response_template": "Hi @$handle. Here's your photo!"
+}

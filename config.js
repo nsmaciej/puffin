@@ -1,6 +1,9 @@
 // Note: This is a JavaScript file.
 // This means it can contain anything including reading environmental variables..
 // no need to have fancy bash init scripts
+var fs = require('fs');
+
+
 module.exports = {
     // Twitter API details
     consumer_key: '...',
@@ -53,5 +56,29 @@ module.exports = {
     // Retry?
     // Here for completness. Probably don't use it unless you want to be sure your photos get delivered at the
     // price of a huge error log and pain. Also it's kind o' untested so use at your own risk.
-    retry_on_failure: false
+    retry_on_failure: false,
+
+    // The stuff to overlay on top or on the sides of the picture
+    // See https://github.com/mgoszcz2/waterstamp/blob/master/test/main.js for more examples
+    // The following appends an image of a puffin in a white box
+    image_template: {
+        append: [
+            {
+                type: 'buffer',
+                buffer: fs.readFileSync('public/puffin.png'),
+                top: 10,
+                right: 10
+            }
+        ]
+    },
+
+    // The port to start the configuration server on unless 'start_http_config' is false
+    config_port: 1024,
+
+    // The file where 'HTTP config' is located
+    http_config_file: 'http-config.json',
+
+    // Disable diffrent components of puffin
+    start_http_config: true,
+    start_twitter_stream: false
 };

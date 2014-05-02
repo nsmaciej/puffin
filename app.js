@@ -4,7 +4,32 @@ var bunyan = require('bunyan');
 var request = require('request');
 var util = require('util');
 var fs = require('fs');
-var http = require('http');
+var express = require('express');
+var waterstamp = require('waterstamp');
+var mustache = require('mustache');
+
+
+/* Esnures a property of an object is of a ceartain type (boolean or number) */
+function ensureOrParse(object, property, type) {
+    if (type == 'boolean') {
+        if (typeof object[property] != 'boolean') {
+            object[property] = (object[property] == 'true');
+        }
+    } else if (type == 'number') {
+        if (typeof object[property] != 'number') {
+            object[property] = parseInt(object[property]);
+        }
+    } else {
+        throw new Error('Wrong type in ensureOrParse');
+    }
+}
+
+
+/* Uses waterstamp to add a watermark to an image as specfied by 'image_template'.
+ * In the future this function will re-generate text too */
+function addWatermark(buffer) {
+    return waterstamp(buffer, config.image_template);
+}
 
 
 /* Handle's an incomign tweet.
@@ -40,23 +65,37 @@ function handleTweet(tweet, cb) {
     var requestObject = request(options, function(error, response, body) {
         var headers = response.headers;
 
-        // Rate limit message.. because webscale
-        var msg = headers['x-mediaratelimit-remaining'] + ' of ' + headers['x-mediaratelimit-limit'];
-        var unixTime = Math.round(new Date().getTime() / 1000); //Current UNIX timestamp in seconds
-        msg += ' pieces of media remaining. Reset at ';
-        msg += Math.round((parseInt(headers['x-mediaratelimit-reset']) - unixTime) / 60 / 60) + ' hours';
-        log.info(msg);
+        if (twitterLimited) { // Nasty race condition
+            return;
+        }
 
         if (error) {
             log.error('Error occured during image upload "' + error + '"');
             cb(false);
             return;
         }
-        if (response.statusCode != 200) {
+
+        if (response.statusCode == 403) {
+            log.warn({reason: body}, 'Twitter update limit reached, waiting 5 minutes');
+            twitterLimited = true;
+            setTimeout(function (){
+                log.warn('Twitter update limit lifted?');
+                twitterLimited = false;
+            }, 5 * 60 * 1000);
+            return;
+
+        } else if (response.statusCode != 200) {
             log.error('Twitter returned non-200 status code on image upload (' + response.statusCode + ')');
             cb(false);
             return;
         }
+
+        // Rate limit message.. because webscale
+        var msg = headers['x-mediaratelimit-remaining'] + ' of ' + headers['x-mediaratelimit-limit'];
+        var unixTime = Math.round(new Date().getTime() / 1000); //Current UNIX timestamp in seconds
+        msg += ' pieces of media remaining. Reset at ';
+        msg += Math.round((parseInt(headers['x-mediaratelimit-reset']) - unixTime) / 60 / 60) + ' hours';
+        log.info(msg);
 
         log.debug('Successfully responded to tweet');
         cb(true);
@@ -120,9 +159,9 @@ function startCacheUpdater() {
         }
 
         endSconds = process.hrtime(startTime);
-        imageCache = body;
+        imageCache = addWatermark(body);
         log.debug('Image cache updated (took ' + endSconds + 's)');
-    });
+    })
 }
 
 
@@ -152,11 +191,11 @@ function startTwitterStream() {
     });
 
     stream.on('tweet', function(tweet) {
-        if (config.do_not_respond) { //Silently fail
+        if (config.do_not_respond || twitterLimited) { //Silently fail
             return;
         }
 
-        log.info('Responding to tweet "' + tweet.text + '"');
+        log.debug('Responding to tweet "' + tweet.text + '"');
 
         // Damn callback require this to be in a separate function
         var tryResponse = function() {
@@ -172,6 +211,49 @@ function startTwitterStream() {
 }
 
 
+/* Starts a server for easily chaning the configuration */
+function startHttpConfigServer() {
+    var app = express();
+
+    app.use(express.basicAuth('username', 'password'));
+    app.use(express.urlencoded());
+    app.use(app.router);
+    app.use(express.static('public'));
+
+    app.get('/', function(req, res) {
+        log.warn('Settings page acessed');
+        res.end(mustache.render(fs.readFileSync('public/index.html', 'utf-8'), httpConfig));
+    });
+
+    app.post('/', function(req, res) {
+        log.warn('New settings saved');
+
+        // Show what settings were chnaged
+        var changed = {};
+        for (var key in req.body) {
+            if (httpConfig[key] != req.body[key]) {
+                changed[key] = req.body[key];
+            }
+        }
+        log.info(changed, 'Changed settings are');
+
+        httpConfig = req.body; // Save changes
+        ensureOrParse(httpConfig, 'set_reply_id', 'boolean');
+        ensureOrParse(httpConfig, 'use_http_auth', 'boolean');
+        ensureOrParse(httpConfig, 'endpoint_timeout', 'number');
+        ensureOrParse(httpConfig, 'endpoint_recovery_time', 'number');
+        fs.writeFileSync(config.http_config_file, JSON.stringify(httpConfig, null, 4)); //Format nicely
+
+        res.sendfile('public/wait.html');
+        setTimeout(function() {
+            process.exit(0);
+        }, 1000 * 5);
+    });
+
+    app.listen(config.config_port);
+}
+
+
 /* Main body */
 var log = bunyan.createLogger({
     name: config.bunyan_name,
@@ -179,13 +261,30 @@ var log = bunyan.createLogger({
 });
 var imageCache = null;
 var requestingImage = false;
+var twitterLimited = false;
+var httpConfig = JSON.parse(fs.readFileSync(config.http_config_file));
+for (var key in httpConfig) { // Merge settings
+    config[key] = httpConfig[key];
+}
 
-log.info('Tracking "' + config.track_keyword + '"');
-if (config.do_not_respond) {
-    log.warn('do_not_respond is on. Won\'t send responses');
-}
-if (!config.set_reply_id) {
-    log.warn('set_reply_id is off. Tweets won\'t be responses');
-}
 startCacheUpdater();
-startTwitterStream();
+
+if (config.start_twitter_stream) {
+    log.info('Tracking "' + config.track_keyword + '"');
+    if (!config.set_reply_id) {
+        log.warn('set_reply_id is off. Tweets won\'t be responses');
+    }
+    if (config.do_not_respond) {
+        log.warn('do_not_respond is on. Won\'t send responses');
+    }
+    startTwitterStream();
+} else {
+    log.warn('start_twitter_stream if off. Won\'t listen for twitter events');
+}
+
+if (config.start_http_config) {
+    log.info('Starting configuration server at port ' + config.config_port);
+    startHttpConfigServer();
+} else {
+    log.warn('start_http_config is off. Won\'t start http configuration server');
+}

@@ -3,11 +3,14 @@
   "version": "0.0.0",
   "author": "Maciej Goszczycki",
   "scripts": {
-      "start": "node app.js"
+    "start": "node app.js"
   },
   "dependencies": {
     "twit": "^1.1.14",
     "request": "^2.34.0",
-    "bunyan": "^0.22.3"
+    "bunyan": "^0.22.3",
+    "waterstamp": "mgoszcz2/waterstamp",
+    "express": "^3.5.2",
+    "mustache": "^0.8.1"
   }
 }
