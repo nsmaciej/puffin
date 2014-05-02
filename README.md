@@ -3,7 +3,7 @@
 
 ### A simple program for replaying to tweets with a keyword with an image from an http server
 
-![Dependencies](https://david-dm.org/evercam/puffin.png)
+![Dependencies](https://david-dm.org/evercam/puffin.svg?style=flat)
 
 ### To run
 
