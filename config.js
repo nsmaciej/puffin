@@ -53,7 +53,7 @@ module.exports = {
 
     // Disable diffrent components of puffin
     start_http_config: true,
-    start_twitter_stream: false,
+    start_twitter_stream: true,
 
     // The HTTP panel username & password
     http_config_username: 'username',
