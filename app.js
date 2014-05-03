@@ -65,28 +65,14 @@ function handleTweet(tweet, cb) {
     var requestObject = request(options, function(error, response, body) {
         var headers = response.headers;
 
-        if (twitterLimited) { // Nasty race condition
-            return;
-        }
-
         if (error) {
             log.error('Error occured during image upload "' + error + '"');
             cb(false);
             return;
         }
 
-        if (response.statusCode == 403) {
-            log.warn({reason: body}, 'Twitter update limit reached, waiting 5 minutes');
-            twitterLimited = true;
-            setTimeout(function (){
-                log.warn('Twitter update limit lifted?');
-                twitterLimited = false;
-            }, 5 * 60 * 1000);
-            return;
-
-        } else if (response.statusCode != 200) {
-            log.error('Twitter returned non-200 status code on image upload (' + response.statusCode + ')');
-            cb(false);
+        if (response.statusCode != 200) {
+            log.error(body, 'Twitter returned non-200 status code on image upload (' + response.statusCode + ')');
             return;
         }
 
@@ -103,11 +89,11 @@ function handleTweet(tweet, cb) {
 
     var form = requestObject.form();
     form.append('status', statusText);
-    form.append('media[]', imageCache);
-
     if (config.set_reply_id) {
-        form.append('in_reply_to_status_id', tweet.id);
+        log.debug('Setting \'in_reply_to_status_id\' to ' + tweet.id_str);
+        form.append('in_reply_to_status_id', tweet.id_str);
     }
+    form.append('media[]', imageCache);
 }
 
 
@@ -191,7 +177,7 @@ function startTwitterStream() {
     });
 
     stream.on('tweet', function(tweet) {
-        if (config.do_not_respond || twitterLimited) { //Silently fail
+        if (config.do_not_respond) { //Silently fail
             return;
         }
 
@@ -267,7 +253,7 @@ var log = bunyan.createLogger({
 });
 var imageCache = null;
 var requestingImage = false;
-var twitterLimited = false;
+
 var httpConfig = JSON.parse(fs.readFileSync(config.http_config_file));
 for (var key in httpConfig) { // Merge settings
     config[key] = httpConfig[key];
