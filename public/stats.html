@@ -1,0 +1,25 @@
+<html>
+    <head>
+        <title>Puffin's settings panel</title>
+        <link href='/style.css' rel='stylesheet' type='text/css'>
+    </head>
+    <body>
+        <img src='/puffin.png' class='logo'>
+        <h1 class='branding'>Puffin's setting panel</h1>
+        <p class='tagline'>Where Puffins change their settings</p>
+        <p class='imagelink underline'><a href='/'>Go back</a></p>
+
+        <div>
+            <span class='label'>Tweets recived: </span><span class='label'>{{tweets_recived}}</span><br>
+            <span class='label'>Successful responses: </span><span class='label'>{{successful_responses}}</span><br>
+            <span class='label'>Failed responses: </span><span class='label'>{{failed_responses}}</span><br>
+            <span class='label'>Last image time: </span><span class='label'>{{last_image_time}}s</span><br>
+            <span class='label'>Last image status: </span><span class='label'>{{last_image_status}} - {{last_image_status_text}}</span><br>
+            <span class='label'>Cache valid: </span><span class='label'>{{cache_valid}}</span><br>
+        </div>
+
+        <p class='info'>
+            More info on each of the options can be found <a href='https://github.com/evercam/puffin/blob/master/docs/config.md'>here</a>.
+        </p>
+    </body>
+</html>

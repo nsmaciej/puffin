@@ -4,6 +4,7 @@ var bunyan = require('bunyan');
 var request = require('request');
 var util = require('util');
 var fs = require('fs');
+var http = require('http');
 var express = require('express');
 var waterstamp = require('waterstamp');
 var mustache = require('mustache');
@@ -36,19 +37,17 @@ function addWatermark(buffer) {
  * Since it contains no 'twit' calls it was separated from on('tweet') call for your enjoyment
  * 'cb' contains the true or false depenign on the successfully 'update_with_media' call
  * Doesn't log anything unless and error occurs */
-function handleTweet(tweet, cb) {
-    if (imageCache == null) { //We don't have an image to respond with
-        log.warn('Missed tweet due to lack of global image cache!');
-        cb(false);
+function handleTweet(tweet) {
+    if (config.do_not_respond) { //Silently fail
         return;
     }
 
-    // Prepare the respond text & data
     var statusText = config.response_template;
-    // PHP-like templating system
-    statusText = statusText.replace(/\$handle/g, tweet.user.screen_name);
+    statusText = statusText.replace(/\$handle/g, tweet.user.screen_name); //PHP-like templating system
 
+    log.debug('Responding to tweet "' + tweet.text + '"');
     log.debug('Respond with "' + statusText + '"');
+    statsData.tweets_recived += 1;
 
     // 'request' is magic - it knows to set 'multipart/form-data' automatically
     var options = {
@@ -62,38 +61,42 @@ function handleTweet(tweet, cb) {
         }
     };
 
-    var requestObject = request(options, function(error, response, body) {
-        var headers = response.headers;
+    // Request new or cached image
+    requestImage(function (image) {
+        var requestObject = request(options, function(error, response, body) {
+            var headers = response.headers;
 
-        if (error) {
-            log.error('Error occured during image upload "' + error + '"');
-            cb(false);
-            return;
+            if (error) {
+                statsData.failed_responses += 1;
+                log.error('Error occured during image upload "' + error + '"');
+                return;
+            }
+
+            if (response.statusCode != 200) {
+                statsData.failed_responses += 1;
+                log.error(body, 'Twitter returned non-200 status code on image upload (' + response.statusCode + ')');
+                return;
+            }
+
+            // Rate limit message.. because webscale
+            var msg = headers['x-mediaratelimit-remaining'] + ' of ' + headers['x-mediaratelimit-limit'];
+            var unixTime = Math.round(new Date().getTime() / 1000); //Current UNIX timestamp in seconds
+            msg += ' pieces of media remaining. Reset at ';
+            msg += Math.round((parseInt(headers['x-mediaratelimit-reset']) - unixTime) / 60 / 60) + ' hours';
+            log.info(msg);
+
+            statsData.successful_responses += 1;
+            log.debug('Successfully responded to tweet');
+        });
+
+        var form = requestObject.form();
+        form.append('status', statusText);
+        if (config.set_reply_id) {
+            log.debug('Setting \'in_reply_to_status_id\' to ' + tweet.id_str);
+            form.append('in_reply_to_status_id', tweet.id_str);
         }
-
-        if (response.statusCode != 200) {
-            log.error(body, 'Twitter returned non-200 status code on image upload (' + response.statusCode + ')');
-            return;
-        }
-
-        // Rate limit message.. because webscale
-        var msg = headers['x-mediaratelimit-remaining'] + ' of ' + headers['x-mediaratelimit-limit'];
-        var unixTime = Math.round(new Date().getTime() / 1000); //Current UNIX timestamp in seconds
-        msg += ' pieces of media remaining. Reset at ';
-        msg += Math.round((parseInt(headers['x-mediaratelimit-reset']) - unixTime) / 60 / 60) + ' hours';
-        log.info(msg);
-
-        log.debug('Successfully responded to tweet');
-        cb(true);
+        form.append('media[]', imageCache);
     });
-
-    var form = requestObject.form();
-    form.append('status', statusText);
-    if (config.set_reply_id) {
-        log.debug('Setting \'in_reply_to_status_id\' to ' + tweet.id_str);
-        form.append('in_reply_to_status_id', tweet.id_str);
-    }
-    form.append('media[]', imageCache);
 }
 
 
@@ -106,13 +109,38 @@ function inspectLog(object) {
 }
 
 
-/* Updates the global image cache
- * bascily a binary buffer located at imageCache
- * it loops automatically every 'endpoint_recovery_time' after updating */
-function startCacheUpdater() {
-    if (requestingImage) {
-        log.warn('Image request already in progress (consider modifying cache_duration)')
+/* Check is cache still valid */
+function cacheValidCheck() {
+    if (imageCache == null) { //No cache
+        return false;
     }
+    if (!config.cache_invalidation) { //Cache is always valid
+        return true;
+    }
+    if (process.hrtime(imageCacheTimeout)[0] <= (config.cache_duration / 1000)) { //Still valid timing
+        return true;
+    }
+    return false; //Fallback
+}
+
+
+/* Request the image, fires a new camera request unless cached with 'cache_duration' */
+function requestImage(cb) {
+    // Try to return the cache if it's still valid
+    // The hrtime() returns time in [secs, nanosecs]
+    if (!forceNewCache && cacheValidCheck()) {
+        log.debug('Retruning a cached image');
+        cb(imageCache);
+        return;
+    }
+
+    if (requestingImage) {
+        log.warn('Image request already in progress, returning old image');
+        cb(imageCache);
+        return;
+    }
+
+    forceNewCache = false;
     requestingImage = true;
 
     var startTime = process.hrtime();
@@ -123,19 +151,18 @@ function startCacheUpdater() {
         encoding: null // Don't encode, Arghh!
     };
 
-    if (config.use_http_auth) { //For HTTP auth on servers
+    if (config.use_http_auth) { // For HTTP auth on servers
         options.auth = {
             username: config.http_username,
             password: config.http_password
         };
     }
 
-    log.debug({url: url}, 'Requesing new image');
+    log.warn({url: url}, 'Missing or old cache, requesting new image');
     request(options, function(error, response, body) {
         // Do this no matter what, since it can produce race conditions on errors
         requestingImage = false;
-        // Loops back but without nasty Stack Overflows
-        setTimeout(startCacheUpdater, config.endpoint_recovery_time);
+        statsData.last_image_status = response.statusCode;
 
         if (error) {
             return log.error({error: error}, 'Error requesing image');
@@ -144,9 +171,12 @@ function startCacheUpdater() {
             return log.error({statusCode: response.statusCode}, 'Non-200 status code during requsting an image');
         }
 
-        endSconds = process.hrtime(startTime);
+        endSconds = process.hrtime(startTime)[0];
+        statsData.last_image_time = endSconds;
         imageCache = addWatermark(body);
         log.debug('Image cache updated (took ' + endSconds + 's)');
+        imageCacheTimeout = process.hrtime(); // Update cache validation
+        cb(imageCache); // Give back our image
     })
 }
 
@@ -176,24 +206,7 @@ function startTwitterStream() {
         log.warn('Twitter dosconnected. Reason "' + msg + '"');
     });
 
-    stream.on('tweet', function(tweet) {
-        if (config.do_not_respond) { //Silently fail
-            return;
-        }
-
-        log.debug('Responding to tweet "' + tweet.text + '"');
-
-        // Damn callback require this to be in a separate function
-        var tryResponse = function() {
-            handleTweet(tweet, function(ok) {
-                if (!ok && config.retry_on_failure) { //We failed and we want to rety
-                    log.warn('\'retry_on_failure\' on. Retrying');
-                    process.setImmediate(tryResponse);
-                }
-            });
-        };
-        tryResponse();
-    });
+    stream.on('tweet', handleTweet);
 }
 
 
@@ -211,9 +224,27 @@ function startHttpConfigServer() {
         res.end(mustache.render(fs.readFileSync('public/index.html', 'utf-8'), httpConfig));
     });
 
+    app.get('/stats.html', function(req, res) {
+        statsData.last_image_status_text = http.STATUS_CODES[statsData.last_image_status] || 'Unknown';
+        statsData.cache_valid = cacheValidCheck();
+        res.end(mustache.render(fs.readFileSync('public/stats.html', 'utf-8'), statsData));
+    });
+
+    app.get('/invalidate.html', function(req, res) {
+        forceNewCache = true;
+        log.warn('Cache invalidation requested manually');
+        requestImage(function() {
+            log.info('Manual cache invalidation successful');
+        });
+        res.sendfile('public/invalidate.html');
+    });
+
     app.get('/preview.png', function(req, res) {
+        log.info('New image preview request');
         res.setHeader('Content-type', 'image/png');
-        res.end(imageCache);
+        requestImage(function(image) {
+            res.end(image);
+        });
     });
 
     app.post('/', function(req, res) {
@@ -231,8 +262,9 @@ function startHttpConfigServer() {
         httpConfig = req.body; // Save changes
         ensureOrParse(httpConfig, 'set_reply_id', 'boolean');
         ensureOrParse(httpConfig, 'use_http_auth', 'boolean');
+        ensureOrParse(httpConfig, 'cache_invalidation', 'boolean');
         ensureOrParse(httpConfig, 'endpoint_timeout', 'number');
-        ensureOrParse(httpConfig, 'endpoint_recovery_time', 'number');
+        ensureOrParse(httpConfig, 'cache_duration', 'number');
         fs.writeFileSync(config.http_config_file, JSON.stringify(httpConfig, null, 4)); //Format nicely
 
         res.sendfile('public/wait.html');
@@ -252,15 +284,29 @@ var log = bunyan.createLogger({
     streams: config.bunyan_streams
 });
 var imageCache = null;
+var imageCacheTimeout = process.hrtime();
 var requestingImage = false;
+var forceNewCache = false;
+var statsData = {
+    tweets_recived: 0,
+    successful_responses: 0,
+    failed_responses: 0,
+    last_image_time: -1,
+    last_image_status: -1,
+    cache_valid: true,
+};
 
 var httpConfig = JSON.parse(fs.readFileSync(config.http_config_file));
 for (var key in httpConfig) { // Merge settings
     config[key] = httpConfig[key];
 }
 
-startCacheUpdater();
-
+if (!config.cache_invalidation) {
+    log.warn('\'cache_invalidation\' is off. Cache will last forever');
+    requestImage(function() {
+        log.info('Initial image cache updated');
+    });
+}
 if (config.start_twitter_stream) {
     log.info('Tracking "' + config.track_keyword + '"');
     if (!config.set_reply_id) {
